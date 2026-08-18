@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Image Similarity Search</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>IMAGE SIMILARITY SEARCH</h1>
+
+        <p class="subtitle">
+            Using Closest Pair Algorithm
+        </p>
+
+
+        <!-- Upload Section -->
+
+        <form action="/search"
+              method="POST"
+              enctype="multipart/form-data"
+              id="search-form">
+
+            <div class="upload-box">
+
+                <label for="image">
+                    Select Image
+                </label>
+
+                <!-- Choose Image -->
+
+                <input type="file"
+                       id="image"
+                       name="image"
+                       accept="image/*">
+
+
+                <!-- Camera Button -->
+
+                <button type="button"
+                        id="camera-button">
+                    📷 Open Camera
+                </button>
+
+
+                <!-- Camera Area -->
+
+                <div id="camera-area"
+                     style="display:none; margin-top:20px;">
+
+                    <video id="camera"
+                           width="350"
+                           height="280"
+                           autoplay
+                           playsinline
+                           style="object-fit:cover;
+                                  border-radius:10px;">
+                    </video>
+
+                    <br><br>
+
+                    <button type="button"
+                            id="capture-button">
+                        📸 Capture Image
+                    </button>
+
+                    <button type="button"
+                            id="close-camera">
+                        ❌ Close Camera
+                    </button>
+
+                </div>
+
+
+                <!-- Hidden Canvas -->
+
+                <canvas id="canvas"
+                        width="350"
+                        height="280"
+                        style="display:none;">
+                </canvas>
+
+
+                <!-- Input Image Preview -->
+
+                <img id="input-preview"
+                     src=""
+                     alt="Input Image Preview"
+                     style="display:none;
+                            width:350px;
+                            height:280px;
+                            object-fit:contain;
+                            margin:20px auto;
+                            border-radius:10px;">
+
+
+                <p id="file-name">
+                    No image selected
+                </p>
+
+            </div>
+
+
+            <!-- Search Button -->
+
+            <button type="submit"
+                    id="search-button">
+                🔍 Search Similar Images
+            </button>
+
+        </form>
+
+
+        <!-- Error Message -->
+
+        {% if error %}
+
+        <div class="error">
+            {{ error }}
+        </div>
+
+        {% endif %}
+
+
+        <!-- Search Results -->
+
+        {% if results %}
+
+        <div class="results">
+
+            <h2>Search Results</h2>
+
+
+            <!-- Input Image -->
+
+            <div class="input-result">
+
+                <h3>Input Image</h3>
+
+                <img src="{{ url_for(
+                    'uploaded_file',
+                    filename=input_image
+                ) }}"
+                alt="Input Image"
+                style="width:350px;
+                       height:280px;
+                       object-fit:contain;
+                       border-radius:10px;">
+
+            </div>
+
+
+            <h2>Top Similar Images</h2>
+
+
+            <!-- Similar Images -->
+
+            <div class="result-container">
+
+                {% for result in results %}
+
+                <div class="image-card">
+
+                    <h3>
+                        Match {{ loop.index }}
+                    </h3>
+
+
+                    <!-- Similar Image -->
+
+                    <img src="{{ url_for(
+                        'dataset_file',
+                        filename=result.image_name
+                    ) }}"
+                    alt="{{ result.image_name }}"
+                    style="width:300px;
+                           height:250px;
+                           object-fit:contain;
+                           border-radius:10px;">
+
+
+                    <!-- Image Name -->
+
+                    <p>
+                        <strong>
+                            Image:
+                        </strong>
+
+                        {{ result.image_name }}
+                    </p>
+
+
+                    <!-- Distance -->
+
+                    <p>
+                        <strong>
+                            Distance:
+                        </strong>
+
+                        {{ result.distance }}
+                    </p>
+
+
+                    <!-- Similarity -->
+
+                    <p>
+                        <strong>
+                            Similarity:
+                        </strong>
+
+                        {{ result.similarity }}%
+                    </p>
+
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- Camera + Preview JavaScript -->
+
+    <script>
+
+        const imageInput =
+            document.getElementById("image");
+
+        const preview =
+            document.getElementById("input-preview");
+
+        const fileName =
+            document.getElementById("file-name");
+
+        const cameraButton =
+            document.getElementById("camera-button");
+
+        const cameraArea =
+            document.getElementById("camera-area");
+
+        const camera =
+            document.getElementById("camera");
+
+        const captureButton =
+            document.getElementById("capture-button");
+
+        const closeCamera =
+            document.getElementById("close-camera");
+
+        const canvas =
+            document.getElementById("canvas");
+
+
+        let cameraStream = null;
+
+
+        /* =====================================
+           CHOOSE IMAGE
+        ===================================== */
+
+        imageInput.addEventListener(
+            "change",
+            function () {
+
+                const file = this.files[0];
+
+                if (file) {
+
+                    const reader =
+                        new FileReader();
+
+                    reader.onload =
+                        function (event) {
+
+                            preview.src =
+                                event.target.result;
+
+                            preview.style.display =
+                                "block";
+
+                        };
+
+                    reader.readAsDataURL(file);
+
+                    fileName.textContent =
+                        "Image selected";
+
+                }
+
+            }
+        );
+
+
+        /* =====================================
+           OPEN CAMERA
+        ===================================== */
+
+        cameraButton.addEventListener(
+            "click",
+            async function () {
+
+                try {
+
+                    cameraStream =
+                        await navigator.mediaDevices
+                        .getUserMedia({
+                            video: {
+                                facingMode: "environment"
+                            }
+                        });
+
+                    camera.srcObject =
+                        cameraStream;
+
+                    cameraArea.style.display =
+                        "block";
+
+                }
+
+                catch (error) {
+
+                    alert(
+                        "Camera access was denied or is not available."
+                    );
+
+                    console.error(error);
+
+                }
+
+            }
+        );
+
+
+        /* =====================================
+           CAPTURE IMAGE
+        ===================================== */
+
+        captureButton.addEventListener(
+            "click",
+            function () {
+
+                const context =
+                    canvas.getContext("2d");
+
+
+                context.drawImage(
+                    camera,
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height
+                );
+
+
+                /* Show captured image */
+
+                preview.src =
+                    canvas.toDataURL("image/jpeg");
+
+                preview.style.display =
+                    "block";
+
+
+                fileName.textContent =
+                    "Camera image captured";
+
+
+                /* Convert canvas to File */
+
+                canvas.toBlob(
+                    function (blob) {
+
+                        const file =
+                            new File(
+                                [blob],
+                                "camera_image.jpg",
+                                {
+                                    type: "image/jpeg"
+                                }
+                            );
+
+
+                        /*
+                         * Put camera image into
+                         * the existing file input.
+                         */
+
+                        const dataTransfer =
+                            new DataTransfer();
+
+                        dataTransfer.items.add(file);
+
+                        imageInput.files =
+                            dataTransfer.files;
+
+
+                        /* Stop camera */
+
+                        stopCamera();
+
+                    },
+                    "image/jpeg"
+                );
+
+            }
+        );
+
+
+        /* =====================================
+           CLOSE CAMERA
+        ===================================== */
+
+        closeCamera.addEventListener(
+            "click",
+            function () {
+
+                stopCamera();
+
+            }
+        );
+
+
+        /* =====================================
+           STOP CAMERA
+        ===================================== */
+
+        function stopCamera() {
+
+            if (cameraStream) {
+
+                cameraStream
+                    .getTracks()
+                    .forEach(
+                        function (track) {
+
+                            track.stop();
+
+                        }
+                    );
+
+                cameraStream = null;
+
+            }
+
+            camera.srcObject = null;
+
+            cameraArea.style.display =
+                "none";
+
+        }
+
+    </script>
+
+</body>
+
+</html>
